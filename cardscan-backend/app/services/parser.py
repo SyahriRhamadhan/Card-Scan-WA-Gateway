@@ -23,6 +23,17 @@ COMPANY_MARKERS = (
     "digital",
 )
 COMPANY_MARKER_SET = set(COMPANY_MARKERS)
+SERVICE_KEYWORDS = (
+    "company profile",
+    "web/mobile",
+    "mobile app",
+    "e-commerce",
+    "custom erp",
+    "odoo erp",
+    "asset & inventory",
+    "rfid",
+    "development",
+)
 
 
 @dataclass
@@ -71,6 +82,11 @@ def _is_contact_line(line: str) -> bool:
     )
 
 
+def _is_service_line(line: str) -> bool:
+    lowered = line.lower()
+    return any(keyword in lowered for keyword in SERVICE_KEYWORDS)
+
+
 def _name_score(line: str) -> int:
     if not _looks_like_name(line):
         return -999
@@ -96,9 +112,24 @@ def _company_score(line: str) -> int:
         score += 1
     if any(ch.isdigit() for ch in line):
         score -= 2
+    if _is_service_line(line):
+        score -= 5
     if any(term in lowered for term in ("manager", "director", "sales", "marketing", "founder", "ceo", "cto", "owner", "real estate", "agent", "agen")):
         score -= 2
     return score
+
+
+def _normalize_phone(value: str) -> str:
+    digits = re.sub(r"\D", "", value)
+    if not digits:
+        return value.strip()
+    if digits.startswith("0"):
+        digits = "62" + digits[1:]
+    if digits.startswith("62"):
+        return f"+{digits}"
+    if value.strip().startswith("+"):
+        return "+" + digits
+    return digits
 
 
 def _normalize_website(value: str) -> str:
@@ -106,6 +137,17 @@ def _normalize_website(value: str) -> str:
     cleaned = re.sub(r"^https?://", "", cleaned)
     cleaned = re.sub(r"^www\.", "", cleaned)
     return cleaned
+
+
+def _company_from_website(websites: list[str]) -> str | None:
+    if not websites:
+        return None
+    root = websites[0].split("/")[0]
+    head = root.split(".")[0]
+    if not head:
+        return None
+    words = re.split(r"[-_]", head)
+    return " ".join(word.capitalize() for word in words if word)
 
 
 def _split_identity_line(line: str) -> tuple[str | None, str | None, str | None]:
@@ -136,7 +178,7 @@ def parse_business_card(text: str) -> ParsedContact:
     lines = _clean_lines(text)
     emails = sorted(set(EMAIL_RE.findall(text)))
     websites = sorted(set(_normalize_website(match.group(1)) for match in WEB_RE.finditer(text)))
-    phones = sorted(set(match.group(0).strip() for match in PHONE_RE.finditer(text) if len(re.sub(r"\D", "", match.group(0))) >= 8))
+    phones = sorted(set(_normalize_phone(match.group(0).strip()) for match in PHONE_RE.finditer(text) if len(re.sub(r"\D", "", match.group(0))) >= 8))
 
     content_lines = [line for line in lines if not _is_contact_line(line)]
 
@@ -168,11 +210,17 @@ def parse_business_card(text: str) -> ParsedContact:
 
     for line in content_lines:
         lowered = line.lower()
-        if title is None and any(keyword in lowered for keyword in ("director", "manager", "sales", "marketing", "founder", "ceo", "cto", "owner", "real estate", "agent", "agen")):
+        if title is None and (
+            any(keyword in lowered for keyword in ("director", "manager", "sales", "marketing", "founder", "ceo", "cto", "owner", "real estate", "agent", "agen"))
+            or ("chief" in lowered and "officer" in lowered)
+        ):
             title = line
             continue
         if address is None and any(keyword in lowered for keyword in ("street", "st.", "road", "rd.", "avenue", "ave", "city", "kota", "jalan", "jln", "rt", "rw")):
             address = line
+
+    if company is None:
+        company = _company_from_website(websites)
 
     if not name:
         notes.append("Nama tidak terdeteksi otomatis, perlu review manual.")

@@ -100,6 +100,16 @@ export default function Index() {
         </p>
 
         <fetcher.Form method="post" encType="multipart/form-data" className="space-y-5">
+          <div className="rounded-xl border border-black bg-[#f6f8f8] p-4">
+            <h3 className="text-2xl text-[#0f2140]">Saran posisi foto</h3>
+            <ul className="mt-2 list-disc space-y-1 pl-6 text-lg text-[#0f2140]">
+              <li>Posisikan kartu lurus dan penuh di frame, sisakan margin tipis di sekeliling.</li>
+              <li>Hindari blur, usahakan kamera stabil dan fokus ke teks.</li>
+              <li>Gunakan cahaya merata, hindari bayangan tangan atau pantulan lampu.</li>
+              <li>Jika terbalik, tetap upload saja. Backend akan coba rotasi otomatis.</li>
+            </ul>
+          </div>
+
           <label className="block cursor-pointer rounded-xl border border-black bg-[#dfe4e4] p-4 shadow-saweria/70">
             <input
               ref={fileInputRef}
